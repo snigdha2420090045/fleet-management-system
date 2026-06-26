@@ -5,6 +5,7 @@ const {
   getUnresolvedAlerts,
   resolveAlert,
   getAlertStats,
+  getServiceAlerts,
   createAlert,
   bulkResolveAlerts,
 } = require("../controllers/alertController");
@@ -19,6 +20,7 @@ router.use(protect);
 router.get("/", getAlerts);
 router.get("/unresolved/list", getUnresolvedAlerts);
 router.get("/stats/summary", getAlertStats);
+router.get("/service/list", getServiceAlerts);
 router.get("/:id", getAlertById);
 router.post("/", authorize(ROLES.ADMIN, ROLES.MANAGER), createAlert);
 router.put("/:id/resolve", resolveAlert);

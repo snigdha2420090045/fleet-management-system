@@ -7,13 +7,13 @@ const connectDB = require("./config/db");
 const SimulationService = require("./services/SimulationService");
 
 const PORT = process.env.PORT || 5000;
-const SIMULATION_INTERVAL_MS = 2500;
+const SIMULATION_INTERVAL_MS = Number(process.env.SIMULATION_INTERVAL_MS || 3000);
 
 const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: (process.env.CORS_ORIGIN || "*").split(",").map((origin) => origin.trim()),
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   },
 });
@@ -50,10 +50,11 @@ io.on("connection", (socket) => {
 
 const startServer = async () => {
   await connectDB();
+  console.log("Database connected successfully");
 
   server.listen(PORT, "0.0.0.0", () => {
-    console.log(`Fleet Management API running on port ${PORT}`);
-    console.log("Socket.IO ready for real-time updates");
+    console.log(`Fleet Management System running on port ${PORT}`);
+    console.log("Socket.IO server ready");
 
     simulationService = new SimulationService(io);
     simulationService.start(SIMULATION_INTERVAL_MS);

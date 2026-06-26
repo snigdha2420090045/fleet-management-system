@@ -43,6 +43,7 @@ class SimulationService {
     SimulationService.activeInstance = this;
 
     console.log(`[SimulationService] Started simulation loop (${this.intervalMs}ms)`);
+    console.log("SimulationService started");
     this.scheduleNextCycle(0);
     return this;
   }
@@ -117,14 +118,16 @@ class SimulationService {
         const update = this.generateCraneUpdate(crane);
         updates.push(update);
         alerts.push(...AlertService.generateCraneAlerts(crane, update));
+        alerts.push(...AlertService.generateServiceAlerts(crane));
       } catch (err) {
         console.error(`[SimulationService] Error processing crane ${crane._id}:`, err.message);
       }
     }
 
     await this.persistUpdates(updates);
+    const savedAlerts = await this.saveAlerts(alerts);
     this.broadcastUpdates(updates);
-    this.broadcastAlerts(alerts);
+    this.broadcastAlerts(savedAlerts.length ? savedAlerts : alerts);
   }
 
   generateCraneUpdate(crane) {
@@ -216,11 +219,41 @@ class SimulationService {
     );
   }
 
+  async saveAlerts(alerts) {
+    if (!alerts.length) return [];
+
+    try {
+      return await retry(
+        () => AlertService.persistAlerts(alerts),
+        { maxAttempts: 3, baseDelayMs: 150, maxDelayMs: 1000 }
+      );
+    } catch (err) {
+      console.error("[SimulationService] Alert persistence failed after retries:", err.message);
+      return [];
+    }
+  }
+
   broadcastUpdates(updates) {
     const timestamp = new Date();
     for (const update of updates) {
       this.socketService.emitCraneUpdate(update, timestamp);
+      this.socketService.emitFuelUpdate(
+        {
+          craneId: update.craneId.toString(),
+          registrationNumber: update.registrationNumber,
+          fuelLevel: update.fuelLevel,
+        },
+        timestamp
+      );
     }
+
+    this.socketService.emitDashboardUpdate(
+      {
+        type: "simulation",
+        updatedCranes: updates.length,
+      },
+      timestamp
+    );
   }
 
   broadcastAlerts(alerts) {

@@ -32,6 +32,12 @@ const validateCrane = [
   body("fuelLevel").optional().isFloat({ min: 0, max: 100 }).withMessage("Fuel level must be 0-100"),
   body("engineHealth").optional().isFloat({ min: 0, max: 100 }).withMessage("Engine health must be 0-100"),
   body("batteryHealth").optional().isFloat({ min: 0, max: 100 }).withMessage("Battery health must be 0-100"),
+  body("serviceThresholds.usageHours").optional().isFloat({ min: 1 }).withMessage("Usage service threshold must be greater than 0"),
+  body("serviceThresholds.timeIntervalDays").optional().isFloat({ min: 1 }).withMessage("Time service interval must be greater than 0"),
+  body("serviceThresholds.components").optional().isArray().withMessage("Component thresholds must be an array"),
+  body("serviceThresholds.components.*.name").optional().trim().notEmpty().withMessage("Component name is required"),
+  body("serviceThresholds.components.*.thresholdHours").optional().isFloat({ min: 1 }).withMessage("Component threshold must be greater than 0"),
+  body("serviceThresholds.components.*.lastServicedAtHours").optional().isFloat({ min: 0 }).withMessage("Component last service hours must be >= 0"),
   body("location.coordinates").optional().isArray({ min: 2, max: 2 }).withMessage("Coordinates must be [lng, lat]"),
   body("location.coordinates.*").optional().isFloat().withMessage("Coordinates must contain numeric values"),
   body("location.coordinates.0")

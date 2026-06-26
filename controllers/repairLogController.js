@@ -42,7 +42,7 @@ exports.createRepairLog = asyncHandler(async (req, res) => {
 
 exports.updateRepairLog = asyncHandler(async (req, res) => {
   const log = await RepairLog.findByIdAndUpdate(req.params.id, req.body, {
-    new: true,
+    returnDocument: "after",
     runValidators: true,
   });
 

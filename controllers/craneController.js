@@ -1,5 +1,6 @@
 const Crane = require("../models/Crane");
 const Alert = require("../models/Alert");
+const FuelLog = require("../models/FuelLog");
 const ApiError = require("../utils/ApiError");
 const asyncHandler = require("../utils/asyncHandler");
 const { sendResponse } = require("../utils/response");
@@ -44,7 +45,7 @@ exports.createCrane = asyncHandler(async (req, res) => {
 
 exports.updateCrane = asyncHandler(async (req, res) => {
   const crane = await Crane.findByIdAndUpdate(req.params.id, req.body, {
-    new: true,
+    returnDocument: "after",
     runValidators: true,
   });
 
@@ -53,6 +54,12 @@ exports.updateCrane = asyncHandler(async (req, res) => {
   // Broadcast update via Socket.IO
   if (global.io) {
     global.io.to(`crane-${crane._id}`).emit("crane-updated", crane);
+    global.io.to(`crane-${crane._id}`).emit("crane:update", crane);
+    global.io.to("tracking-room").emit("dashboard:update", {
+      type: "crane",
+      craneId: crane._id,
+      timestamp: new Date(),
+    });
   }
 
   sendResponse(res, 200, "Crane updated", { crane });
@@ -62,7 +69,7 @@ exports.deleteCrane = asyncHandler(async (req, res) => {
   const crane = await Crane.findByIdAndUpdate(
     req.params.id,
     { isActive: false },
-    { new: true }
+    { returnDocument: "after" }
   );
 
   if (!crane) throw new ApiError(404, "Crane not found.");
@@ -71,6 +78,8 @@ exports.deleteCrane = asyncHandler(async (req, res) => {
 
 exports.getDashboardKPIs = asyncHandler(async (req, res) => {
   const filter = buildCraneFilter(req.user);
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
 
   const [
     totalCount,
@@ -81,6 +90,7 @@ exports.getDashboardKPIs = asyncHandler(async (req, res) => {
     cranes,
     criticalAlerts,
     warningAlerts,
+    fuelUsageToday,
   ] = await Promise.all([
     Crane.countDocuments(filter),
     Crane.countDocuments({ ...filter, status: CRANE_STATUS.ACTIVE }),
@@ -92,6 +102,23 @@ exports.getDashboardKPIs = asyncHandler(async (req, res) => {
     ),
     Alert.countDocuments({ isResolved: false, severity: "critical" }),
     Alert.countDocuments({ isResolved: false, severity: "warning" }),
+    FuelLog.aggregate([
+      {
+        $match: {
+          type: "consumption",
+          loggedAt: { $gte: startOfToday },
+          ...(req.user.role === ROLES.OPERATOR ? { crane: { $in: req.user.assignedCranes } } : {}),
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalQuantity: { $sum: "$quantity" },
+          totalCost: { $sum: "$cost" },
+          entries: { $sum: 1 },
+        },
+      },
+    ]),
   ]);
 
   const avgFuelLevel =
@@ -110,6 +137,8 @@ exports.getDashboardKPIs = asyncHandler(async (req, res) => {
   const lowFuelCount = cranes.filter((c) => c.fuelLevel < 20).length;
   const poorHealthCount = cranes.filter((c) => c.engineHealth < 60).length;
   const overheatingCount = cranes.filter((c) => c.engineTemperature > 100).length;
+  const breakdownRiskCount = cranes.filter((c) => calculateBreakdownRisk(c).score > 60).length;
+  const todayFuel = fuelUsageToday[0] || { totalQuantity: 0, totalCost: 0, entries: 0 };
 
   sendResponse(res, 200, "Dashboard KPIs fetched", {
     kpis: {
@@ -124,6 +153,9 @@ exports.getDashboardKPIs = asyncHandler(async (req, res) => {
         avgFuelLevel,
         avgEngineHealth,
         totalRuntimeHours: Math.round(totalRuntimeHours),
+        fuelUsageToday: Math.round(todayFuel.totalQuantity),
+        fuelCostToday: Math.round(todayFuel.totalCost),
+        fuelEntriesToday: todayFuel.entries,
       },
       alerts: {
         critical: criticalAlerts,
@@ -131,6 +163,7 @@ exports.getDashboardKPIs = asyncHandler(async (req, res) => {
         lowFuel: lowFuelCount,
         poorHealth: poorHealthCount,
         overheating: overheatingCount,
+        breakdownRisk: breakdownRiskCount,
       },
       efficiency: {
         operationalEfficiency: totalCount > 0 ? Math.max(0, 100 - (poorHealthCount / totalCount) * 100) : 0,

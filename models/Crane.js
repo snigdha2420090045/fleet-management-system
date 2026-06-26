@@ -32,6 +32,17 @@ const craneSchema = new mongoose.Schema(
     idleHours: { type: Number, default: 0 },
     lastServiceDate: { type: Date },
     nextServiceDate: { type: Date },
+    serviceThresholds: {
+      usageHours: { type: Number, default: 500 },
+      timeIntervalDays: { type: Number, default: 30 },
+      components: [
+        {
+          name: { type: String, trim: true },
+          thresholdHours: { type: Number, default: 500 },
+          lastServicedAtHours: { type: Number, default: 0 },
+        },
+      ],
+    },
     location: {
       type: {
         type: String,
@@ -70,5 +81,6 @@ const craneSchema = new mongoose.Schema(
 craneSchema.index({ location: "2dsphere" });
 craneSchema.index({ status: 1 });
 craneSchema.index({ assignedOperator: 1 });
+craneSchema.index({ "serviceThresholds.usageHours": 1 });
 
 module.exports = mongoose.model("Crane", craneSchema);

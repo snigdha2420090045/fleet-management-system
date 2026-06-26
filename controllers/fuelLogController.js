@@ -41,6 +41,26 @@ exports.createFuelLog = asyncHandler(async (req, res) => {
     await crane.save();
   }
 
+  if (global.io) {
+    const payload = {
+      craneId: crane._id.toString(),
+      registrationNumber: crane.registrationNumber,
+      fuelLevel: crane.fuelLevel,
+      logId: log._id,
+      type: log.type,
+      quantity: log.quantity,
+      timestamp: log.loggedAt,
+    };
+
+    global.io.to("tracking-room").emit("fuel:update", payload);
+    global.io.to(`crane-${crane._id}`).emit("fuel:update", payload);
+    global.io.to("tracking-room").emit("dashboard:update", {
+      type: "fuel",
+      craneId: crane._id.toString(),
+      timestamp: log.loggedAt,
+    });
+  }
+
   sendResponse(res, 201, "Fuel log created", { log });
 });
 

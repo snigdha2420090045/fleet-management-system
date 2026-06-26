@@ -34,7 +34,7 @@ exports.createUser = asyncHandler(async (req, res) => {
 
 exports.updateUser = asyncHandler(async (req, res) => {
   const user = await User.findByIdAndUpdate(req.params.id, req.body, {
-    new: true,
+    returnDocument: "after",
     runValidators: true,
   }).select("-password");
 
@@ -46,7 +46,7 @@ exports.deleteUser = asyncHandler(async (req, res) => {
   const user = await User.findByIdAndUpdate(
     req.params.id,
     { isActive: false },
-    { new: true }
+    { returnDocument: "after" }
   );
 
   if (!user) throw new ApiError(404, "User not found.");
@@ -59,7 +59,7 @@ exports.assignCranes = asyncHandler(async (req, res) => {
   const user = await User.findByIdAndUpdate(
     req.params.id,
     { assignedCranes: craneIds },
-    { new: true, runValidators: true }
+    { returnDocument: "after", runValidators: true }
   ).populate("assignedCranes", "registrationNumber model");
 
   if (!user) throw new ApiError(404, "User not found.");

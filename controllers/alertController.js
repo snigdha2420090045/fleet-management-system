@@ -79,6 +79,21 @@ exports.getUnresolvedAlerts = asyncHandler(async (req, res) => {
   });
 });
 
+exports.getServiceAlerts = asyncHandler(async (req, res) => {
+  const filter = {
+    type: "service",
+    isResolved: false,
+    ...buildAlertFilter(req.user),
+  };
+
+  const alerts = await Alert.find(filter)
+    .populate("crane", "registrationNumber model runtimeHours serviceThresholds nextServiceDate")
+    .sort({ severity: -1, dueDate: 1, createdAt: -1 })
+    .limit(100);
+
+  sendResponse(res, 200, "Service alerts fetched", { alerts });
+});
+
 exports.resolveAlert = asyncHandler(async (req, res) => {
   const { notes } = req.body;
 
@@ -90,7 +105,7 @@ exports.resolveAlert = asyncHandler(async (req, res) => {
       resolvedBy: req.user._id,
       notes,
     },
-    { new: true }
+    { returnDocument: "after" }
   );
 
   if (!alert) throw new ApiError(404, "Alert not found.");
@@ -100,6 +115,12 @@ exports.resolveAlert = asyncHandler(async (req, res) => {
       alertId: alert._id,
       craneId: alert.crane,
       resolvedAt: alert.resolvedAt,
+    });
+    global.io.to("tracking-room").emit("dashboard:update", {
+      type: "alert-resolved",
+      alertId: alert._id,
+      craneId: alert.crane,
+      timestamp: alert.resolvedAt,
     });
   }
 
@@ -154,7 +175,7 @@ exports.getAlertStats = asyncHandler(async (req, res) => {
 });
 
 exports.createAlert = asyncHandler(async (req, res) => {
-  const { craneId, type, severity, message, metric, metricValue, threshold } = req.body;
+  const { craneId, type, severity, message, metric, metricValue, threshold, serviceType, dueDate, componentName, description } = req.body;
 
   const crane = await Crane.findById(craneId);
   if (!crane) throw new ApiError(404, "Crane not found.");
@@ -168,16 +189,29 @@ exports.createAlert = asyncHandler(async (req, res) => {
     metric,
     metricValue,
     threshold,
+    serviceType,
+    dueDate,
+    componentName,
+    notes: description,
   });
 
   if (global.io) {
-    global.io.to("alerts-room").emit("new-alert", {
+    const payload = {
       alertId: alert._id,
       craneId: alert.crane,
       registrationNumber: alert.registrationNumber,
       type: alert.type,
       severity: alert.severity,
       message: alert.message,
+      timestamp: alert.createdAt,
+    };
+
+    global.io.to("alerts-room").emit("new-alert", payload);
+    global.io.to("alerts-room").emit("alert:new", payload);
+    global.io.to("tracking-room").emit("dashboard:update", {
+      type: "alert",
+      craneId: alert.crane,
+      severity: alert.severity,
       timestamp: alert.createdAt,
     });
   }

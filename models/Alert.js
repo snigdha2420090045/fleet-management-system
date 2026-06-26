@@ -22,10 +22,16 @@ const alertSchema = new mongoose.Schema(
     message: { type: String, required: true },
     metric: {
       type: String,
-      enum: ["fuel", "engineHealth", "engineTemp", "oilPressure", "batteryHealth", "runtime"],
+      enum: ["fuel", "engineHealth", "engineTemp", "oilPressure", "batteryHealth", "runtime", "serviceTime", "component"],
     },
     metricValue: { type: Number },
     threshold: { type: Number },
+    serviceType: {
+      type: String,
+      enum: ["Usage-based", "Time-based", "Component-based"],
+    },
+    dueDate: { type: Date },
+    componentName: { type: String, trim: true },
     isResolved: { type: Boolean, default: false },
     resolvedAt: { type: Date },
     resolvedBy: {
